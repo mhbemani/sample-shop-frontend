@@ -26,14 +26,16 @@ function ChatAssistant() {
     if (!chatInput.trim()) return;
 
     const userMessage = { text: chatInput, type: "user" };
-    setChatMessages((prev) => [...prev, userMessage]);
+    // Add user message and model placeholder in one go
+    setChatMessages((prev) => [
+      ...prev,
+      userMessage,
+      { text: "", type: "model" },
+    ]);
+    const modelMessageIndex = chatMessages.length + 1;
+
     setChatInput("");
     setLoading(true);
-
-    // Add placeholder for model message
-    const modelMessagePlaceholder = { text: "", type: "model" };
-    setChatMessages((prev) => [...prev, modelMessagePlaceholder]);
-    const modelMessageIndex = chatMessages.length + 1;
 
     try {
       if (!API_KEY) {
@@ -50,17 +52,18 @@ function ChatAssistant() {
       });
 
       const responseStream = await chat.sendMessageStream({ message: chatInput });
-      let fullResponse = "";
 
+      // **FIXED CODE BLOCK**
+      // We will now update the state safely within the loop
       for await (const chunk of responseStream) {
-        fullResponse += chunk.text;
-
-        // Safely update the placeholder message
         setChatMessages((prev) => {
           const newMessages = [...prev];
+          // Ensure the placeholder message exists before trying to update it
           if (newMessages[modelMessageIndex]) {
+            // Append the new chunk text to the previous text for that message
+            const updatedText = newMessages[modelMessageIndex].text + chunk.text;
             newMessages[modelMessageIndex] = {
-              text: fullResponse,
+              text: updatedText,
               type: "model",
             };
           }
@@ -69,10 +72,16 @@ function ChatAssistant() {
       }
     } catch (err) {
       console.error(err);
-      setChatMessages((prev) => [
-        ...prev,
-        { text: "Sorry, something went wrong.", type: "model" },
-      ]);
+      // To prevent duplicate error messages, find the placeholder and replace it.
+      setChatMessages((prev) => {
+        const newMessages = [...prev];
+        if (newMessages[modelMessageIndex] && newMessages[modelMessageIndex].text === "") {
+          newMessages[modelMessageIndex] = { text: "Sorry, something went wrong.", type: "model" };
+          return newMessages;
+        }
+        // If it wasn't there, just add the error message
+        return [...prev, { text: "Sorry, something went wrong.", type: "model" }];
+      });
     } finally {
       setLoading(false);
       scrollToBottom();
@@ -116,6 +125,7 @@ function ChatAssistant() {
               margin: "5px 0",
               alignSelf: msg.type === "user" ? "flex-end" : "flex-start",
               maxWidth: "80%",
+              wordWrap: "break-word",
             }}
             dangerouslySetInnerHTML={
               msg.type === "model" ? { __html: marked.parse(msg.text) } : undefined
@@ -134,6 +144,7 @@ function ChatAssistant() {
           onKeyPress={handleKeyPress}
           style={{ flex: 1, padding: "8px", borderRadius: "20px", border: "1px solid #ccc" }}
           placeholder="Ask about products..."
+          disabled={loading}
         />
         <button
           onClick={sendMessage}
