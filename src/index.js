@@ -18,52 +18,47 @@ function ChatAssistant() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // Show initial message
-  useEffect(() => {
-    if (API_KEY) {
-      setChatMessages([
-        {
-          text: "Hello! I'm your friendly product assistant. How can I help you today?",
-          type: "model",
-        },
-      ]);
-    } else {
-      setChatMessages([{ text: "Error: API key is not configured.", type: "model" }]);
-    }
-  }, []);
-
   const sendMessage = async () => {
-    if (!chatInput.trim() || !API_KEY) return;
+    if (!chatInput.trim()) return;
 
     const userMessage = { text: chatInput, type: "user" };
     setChatMessages((prev) => [...prev, userMessage]);
-    const inputText = chatInput; // save input before clearing
     setChatInput("");
     setLoading(true);
 
+    // Add a placeholder for the model message
+    setChatMessages((prev) => [...prev, { text: "", type: "model" }]);
+    const modelMessageIndex = chatMessages.length + 1; // safe index for placeholder
+
     try {
+      if (!API_KEY) {
+        throw new Error("API key is not configured");
+      }
+
       const ai = new GoogleGenAI({ apiKey: API_KEY });
       const chat = ai.chats.create({
         model: "gemini-2.5-flash",
         config: {
           systemInstruction:
-            "You are a friendly assistant for our product pages. Answer concisely in casual English about product specs, shipping, and returns.",
+            "You are a friendly assistant for our product pages. Answer concisely in casual english when asked about product specs, shipping, and returns.",
         },
       });
 
-      // Add placeholder for model response
-      setChatMessages((prev) => [...prev, { text: "", type: "model" }]);
+      const responseStream = await chat.sendMessageStream({ message: chatInput });
       let fullResponse = "";
 
-      // Collect the stream outside of setChatMessages
-      for await (const chunk of chat.sendMessageStream({ message: inputText })) {
+      for await (const chunk of responseStream) {
         fullResponse += chunk.text;
 
-        // Update last message
+        // Update the placeholder model message
         setChatMessages((prev) => {
           const newMessages = [...prev];
-          const lastIndex = newMessages.findIndex((msg) => msg.type === "model" && msg.text === "");
-          if (lastIndex !== -1) newMessages[lastIndex].text = fullResponse;
+          if (newMessages[modelMessageIndex]) {
+            newMessages[modelMessageIndex] = {
+              text: fullResponse,
+              type: "model",
+            };
+          }
           return newMessages;
         });
       }
@@ -71,7 +66,7 @@ function ChatAssistant() {
       console.error(err);
       setChatMessages((prev) => [
         ...prev,
-        { text: "Sorry, something went wrong. Please try again.", type: "model" },
+        { text: "Sorry, something went wrong.", type: "model" },
       ]);
     } finally {
       setLoading(false);
@@ -136,7 +131,7 @@ function ChatAssistant() {
         />
         <button
           onClick={sendMessage}
-          disabled={loading || !API_KEY}
+          disabled={loading}
           style={{
             marginLeft: "5px",
             padding: "8px 12px",
