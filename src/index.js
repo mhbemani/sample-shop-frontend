@@ -14,12 +14,13 @@ function ChatAssistant() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
 
+  // Scroll to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  // Show initial message
   useEffect(() => {
-    // Initialize assistant welcome message
     if (API_KEY) {
       setChatMessages([
         {
@@ -28,12 +29,7 @@ function ChatAssistant() {
         },
       ]);
     } else {
-      setChatMessages([
-        {
-          text: "Error: API key is not configured.",
-          type: "model",
-        },
-      ]);
+      setChatMessages([{ text: "Error: API key is not configured.", type: "model" }]);
     }
   }, []);
 
@@ -55,17 +51,20 @@ function ChatAssistant() {
         },
       });
 
-      const responseStream = await chat.sendMessageStream({ message: userMessage.text });
-
-      // Add a placeholder for model message
+      // Add placeholder for model
       setChatMessages((prev) => [...prev, { text: "", type: "model" }]);
+
+      const responseStream = await chat.sendMessageStream({ message: userMessage.text });
 
       let fullResponse = "";
       for await (const chunk of responseStream) {
         fullResponse += chunk.text;
+
+        // Update last message safely
         setChatMessages((prev) => {
           const newMessages = prev.slice();
-          newMessages[newMessages.length - 1] = { text: fullResponse, type: "model" };
+          const lastIndex = newMessages.length - 1;
+          newMessages[lastIndex] = { text: fullResponse, type: "model" };
           return newMessages;
         });
       }
