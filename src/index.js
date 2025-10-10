@@ -4,8 +4,9 @@ import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { marked } from "marked";
-// import { GoogleGenAI } from "@google/genai"; // uncomment if installed via npm
+import { GoogleGenAI } from "@google/genai";
 
+// Read API key from environment
 const API_KEY = process.env.REACT_APP_API_KEY;
 
 function ChatAssistant() {
@@ -14,6 +15,7 @@ function ChatAssistant() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
 
+  // Scroll to bottom when messages change
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
@@ -23,20 +25,35 @@ function ChatAssistant() {
 
     const userMessage = { text: chatInput, type: "user" };
     setChatMessages((prev) => [...prev, userMessage]);
-    setChatInput("");
     setLoading(true);
 
     try {
-      // Example: POST to your backend endpoint /api/chat
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: chatInput }),
+      // Initialize AI client
+      const ai = new GoogleGenAI({ apiKey: API_KEY });
+      const chat = ai.chats.create({
+        model: "gemini-2.5-flash",
+        config: {
+          systemInstruction:
+            "You are a friendly assistant for our product pages. Answer concisely in casual english when asked about product specs, shipping, and returns.",
+        },
       });
 
-      const data = await response.json();
-      const modelMessage = { text: data.reply, type: "model" };
-      setChatMessages((prev) => [...prev, modelMessage]);
+      // Send user message and receive streamed response
+      const responseStream = await chat.sendMessageStream({ message: chatInput });
+
+      const modelMessageDiv = { text: "", type: "model" };
+      setChatMessages((prev) => [...prev, modelMessageDiv]);
+
+      let fullResponse = "";
+      for await (const chunk of responseStream) {
+        fullResponse += chunk.text;
+        setChatMessages((prev) => {
+          // Update the last message with streamed text
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1] = { text: fullResponse, type: "model" };
+          return newMessages;
+        });
+      }
     } catch (err) {
       console.error(err);
       setChatMessages((prev) => [
@@ -44,6 +61,7 @@ function ChatAssistant() {
         { text: "Sorry, something went wrong.", type: "model" },
       ]);
     } finally {
+      setChatInput("");
       setLoading(false);
     }
   };
