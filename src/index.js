@@ -14,7 +14,6 @@ function ChatAssistant() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
@@ -38,6 +37,7 @@ function ChatAssistant() {
 
     const userMessage = { text: chatInput, type: "user" };
     setChatMessages((prev) => [...prev, userMessage]);
+    const inputText = chatInput; // save input before clearing
     setChatInput("");
     setLoading(true);
 
@@ -51,20 +51,19 @@ function ChatAssistant() {
         },
       });
 
-      // Add placeholder for model
+      // Add placeholder for model response
       setChatMessages((prev) => [...prev, { text: "", type: "model" }]);
-
-      const responseStream = await chat.sendMessageStream({ message: userMessage.text });
-
       let fullResponse = "";
-      for await (const chunk of responseStream) {
+
+      // Collect the stream outside of setChatMessages
+      for await (const chunk of chat.sendMessageStream({ message: inputText })) {
         fullResponse += chunk.text;
 
-        // Update last message safely
+        // Update last message
         setChatMessages((prev) => {
-          const newMessages = prev.slice();
-          const lastIndex = newMessages.length - 1;
-          newMessages[lastIndex] = { text: fullResponse, type: "model" };
+          const newMessages = [...prev];
+          const lastIndex = newMessages.findIndex((msg) => msg.type === "model" && msg.text === "");
+          if (lastIndex !== -1) newMessages[lastIndex].text = fullResponse;
           return newMessages;
         });
       }
