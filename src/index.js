@@ -14,8 +14,12 @@ function ChatAssistant() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
 
-  useEffect(() => {
+  const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
   }, [chatMessages]);
 
   const sendMessage = async () => {
@@ -26,9 +30,10 @@ function ChatAssistant() {
     setChatInput("");
     setLoading(true);
 
-    // Add a placeholder for the model message
-    setChatMessages((prev) => [...prev, { text: "", type: "model" }]);
-    const modelMessageIndex = chatMessages.length + 1; // safe index for placeholder
+    // Add placeholder for model message
+    const modelMessagePlaceholder = { text: "", type: "model" };
+    setChatMessages((prev) => [...prev, modelMessagePlaceholder]);
+    const modelMessageIndex = chatMessages.length + 1;
 
     try {
       if (!API_KEY) {
@@ -50,7 +55,7 @@ function ChatAssistant() {
       for await (const chunk of responseStream) {
         fullResponse += chunk.text;
 
-        // Update the placeholder model message
+        // Safely update the placeholder message
         setChatMessages((prev) => {
           const newMessages = [...prev];
           if (newMessages[modelMessageIndex]) {
@@ -70,6 +75,7 @@ function ChatAssistant() {
       ]);
     } finally {
       setLoading(false);
+      scrollToBottom();
     }
   };
 
@@ -149,7 +155,6 @@ function ChatAssistant() {
   );
 }
 
-// Main render
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
